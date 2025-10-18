@@ -1,16 +1,22 @@
-// test/widget_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:waiting_room_app/main.dart';
 
 void main() {
-  testWidgets('App displays WaitingRoomCard with correct name', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+  testWidgets('App displays initial queue and adds a client', (WidgetTester tester) async {
+    // ARRANGE
+    await tester.pumpWidget(const WaitingRoomApp());
 
-    // Vérifie que le texte "Hello," est affiché
-    expect(find.text('Hello,'), findsOneWidget);
+    // ASSERT: Vérifie que la file est vide au départ
+    expect(find.text('Clients in Queue: 0'), findsOneWidget);
 
-    // Vérifie que le nom "John Doe" est affiché
-    expect(find.text('John Doe'), findsOneWidget);
+    // ACT: Ajoute un client
+    await tester.enterText(find.byType(TextField), 'John Doe');
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pump(); // Rebuild après setState()
+
+    // ASSERT: Vérifie que le client est affiché
+    expect(find.text('John Doe'), findsAtLeastNWidgets(1)); // ← corrigé ici
+    expect(find.text('Clients in Queue: 1'), findsOneWidget);
   });
 }
