@@ -4,12 +4,34 @@ import 'package:provider/provider.dart'; // ✅ Nécessaire pour Provider
 import 'package:waiting_room_app/main.dart';
 import 'package:waiting_room_app/queue_provider.dart'; // ✅ Nécessaire pour QueueProvider
 
+// Simple fakes to avoid requiring Supabase initialization during widget tests.
+class _FakeQuery {
+  final List<Map<String, dynamic>> calls = [];
+
+  Future<void> insert(Map<String, dynamic> data) async {
+    calls.add(data);
+  }
+
+  Future<void> delete() async {}
+  Future<void> match(Map<String, dynamic> _) async {}
+}
+
+class _FakeClient {
+  final _FakeQuery query;
+  _FakeClient(this.query);
+  dynamic from(String _) => query;
+}
+
 void main() {
   testWidgets('should add a new client to the list on button tap', (WidgetTester tester) async {
+    // Provide a fake supabase-like client to avoid requiring Supabase initialization
+    final fakeQuery = _FakeQuery();
+    final fakeClient = _FakeClient(fakeQuery);
+
     // ✅ Injecte QueueProvider dans l’arbre de test
     await tester.pumpWidget(
       ChangeNotifierProvider(
-        create: (_) => QueueProvider(),
+        create: (_) => QueueProvider.forTesting(fakeClient),
         child: const MaterialApp(home: WaitingRoomScreen()),
       ),
     );
@@ -25,10 +47,13 @@ void main() {
   });
 
   testWidgets('should remove a client from the list when the delete button is tapped', (WidgetTester tester) async {
+    final fakeQuery = _FakeQuery();
+    final fakeClient = _FakeClient(fakeQuery);
+
     // ✅ Injecte QueueProvider ici aussi (corrigé)
     await tester.pumpWidget(
       ChangeNotifierProvider(
-        create: (_) => QueueProvider(),
+        create: (_) => QueueProvider.forTesting(fakeClient),
         child: const MaterialApp(home: WaitingRoomScreen()),
       ),
     );
@@ -53,9 +78,12 @@ void main() {
 
   testWidgets('should remove the first client from the list when "Next Client" is tapped', (WidgetTester tester) async {
     // ✅ Injecte QueueProvider dans le test
+    final fakeQuery = _FakeQuery();
+    final fakeClient = _FakeClient(fakeQuery);
+
     await tester.pumpWidget(
       ChangeNotifierProvider(
-        create: (context) => QueueProvider(),
+        create: (context) => QueueProvider.forTesting(fakeClient),
         child: const MaterialApp(home: WaitingRoomScreen()),
       ),
     );
