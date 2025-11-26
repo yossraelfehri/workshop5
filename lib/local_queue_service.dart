@@ -34,7 +34,18 @@ name TEXT NOT NULL,
 lat REAL,
 lng REAL,
 created_at TEXT NOT NULL,
+waiting_room_id TEXT,
 is_synced INTEGER NOT NULL DEFAULT 0
+)
+''');
+    // Créer aussi la table pour les rooms en local
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS local_rooms (
+id TEXT PRIMARY KEY,
+name TEXT NOT NULL,
+latitude REAL NOT NULL,
+longitude REAL NOT NULL,
+last_synced TEXT
 )
 ''');
   }
@@ -101,6 +112,44 @@ is_synced INTEGER NOT NULL DEFAULT 0
 
     final db = await database;
     await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Méthodes pour gérer les rooms localement
+  Future<void> insertRoomLocally(Map<String, dynamic> room) async {
+    if (_inMemory) {
+      // Pour les tests, on ne stocke pas les rooms en mémoire
+      return;
+    }
+
+    final db = await database;
+    await db.insert(
+      'local_rooms',
+      {
+        'id': room['id']?.toString(),
+        'name': room['name'],
+        'latitude': _toDouble(room['latitude']),
+        'longitude': _toDouble(room['longitude']),
+        'last_synced': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getRooms() async {
+    if (_inMemory) {
+      return [];
+    }
+
+    final db = await database;
+    return db.query('local_rooms');
+  }
+
+  double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return null;
   }
 
   Future<void> close() async {

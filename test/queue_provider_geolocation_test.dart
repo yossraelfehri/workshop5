@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:waiting_room_app/queue_provider.dart';
 import 'package:waiting_room_app/main.dart';
+import 'package:waiting_room_app/connectivity_service.dart';
 
 // Simple fakes to match how other widget/unit tests in this repo provide
 // a supabase-like client during tests.
@@ -43,19 +44,23 @@ void main() {
   testWidgets('Displays location not captured for test-mode client', (tester) async {
     final fakeQuery = _FakeQuery();
     final fakeClient = _FakeClient(fakeQuery);
-    final provider = QueueProvider.forTesting(fakeClient);
+    final connectivityService = ConnectivityService();
+    final provider = QueueProvider.forTesting(fakeClient, connectivity: connectivityService);
 
     // Add a client in testing mode; geolocation is skipped and lat/lng are null.
     await provider.addClient('Sam');
 
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: provider,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ConnectivityService>.value(value: connectivityService),
+          ChangeNotifierProvider.value(value: provider),
+        ],
         child: const MaterialApp(home: WaitingRoomScreen()),
       ),
     );
 
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Sam'), findsOneWidget);
     expect(find.text('📍 Location not captured'), findsOneWidget);

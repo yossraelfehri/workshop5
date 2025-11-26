@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:waiting_room_app/queue_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:waiting_room_app/connectivity_service.dart';
+import 'package:waiting_room_app/room_list_screen.dart';
 
 // Small fake client used when Supabase isn't configured at runtime so the app
 // still renders for development or demo purposes.
@@ -58,19 +60,27 @@ class WaitingRoomApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => client != null ? QueueProvider.forTesting(client) : QueueProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ConnectivityService()),
+        ChangeNotifierProxyProvider<ConnectivityService, QueueProvider>(
+          create: (context) => QueueProvider(connectivity: Provider.of<ConnectivityService>(context, listen: false)),
+          update: (context, connectivity, previous) =>
+            previous ?? QueueProvider(connectivity: connectivity),
+        ),
+      ],
       child: MaterialApp(
         title: 'Waiting Room',
         theme: ThemeData(primarySwatch: Colors.blue),
-            home: const WaitingRoomScreen(),
+        home: const RoomListScreen(),
       ),
     );
   }
 }
 
 class WaitingRoomScreen extends StatefulWidget {
-  const WaitingRoomScreen({super.key});
+  final String? roomId;
+  const WaitingRoomScreen({super.key, this.roomId});
 
   @override
   State<WaitingRoomScreen> createState() => _WaitingRoomScreenState();
@@ -78,6 +88,18 @@ class WaitingRoomScreen extends StatefulWidget {
 
 class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   final TextEditingController controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // S'abonner à la salle et charger les clients au démarrage
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<QueueProvider>();
+      if (widget.roomId != null) {
+        provider.loadClientsForRoom(widget.roomId!);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -94,8 +116,22 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
+        child: 
+        Column(
           children: [
+            Consumer<ConnectivityService>(
+              builder: (context, connectivity, child) {
+                if (!connectivity.isOnline) {
+                  return Container(
+                    width: double.infinity,
+                    color: Colors.red,
+                    padding: const EdgeInsets.all(8),
+                    child: const Text('Vous êtes hors ligne', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
             // Show a small dev banner when using the fake client so it's obvious the app
             // is running in dev mode (no Supabase configured).
             Consumer<QueueProvider>(
@@ -118,7 +154,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
                     controller: controller,
                     decoration: const InputDecoration(hintText: 'Enter name'),
                     onSubmitted: (name) {
-                      context.read<QueueProvider>().addClient(name);
+                      context.read<QueueProvider>().addClient(name, forcedRoomId: widget.roomId);
                       controller.clear();
                     },
                   ),
@@ -133,7 +169,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
                         print('Add button tapped with name="$name"');
                       }
                       if (name.isNotEmpty) {
-                        context.read<QueueProvider>().addClient(name);
+                        context.read<QueueProvider>().addClient(name, forcedRoomId: widget.roomId);
                         controller.clear();
                       }
                     },

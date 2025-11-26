@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart'; // ✅ Ajouté pour Provider
+import 'package:provider/provider.dart';
 import 'package:waiting_room_app/main.dart';
-import 'package:waiting_room_app/queue_provider.dart'; // ✅ Ajouté pour QueueProvider
+import 'package:waiting_room_app/queue_provider.dart';
+import 'package:waiting_room_app/connectivity_service.dart';
 
 // Simple fakes to avoid requiring Supabase initialization during widget tests.
 class _FakeQuery {
@@ -28,21 +29,31 @@ void main() {
     final fakeQuery = _FakeQuery();
     final fakeClient = _FakeClient(fakeQuery);
 
-    // ✅ Fournir QueueProvider dans l’arbre de widgets
+    final connectivityService = ConnectivityService();
+    
+    // Fournir ConnectivityService et QueueProvider dans l'arbre de widgets
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => QueueProvider.forTesting(fakeClient),
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ConnectivityService>.value(value: connectivityService),
+          ChangeNotifierProvider(
+            create: (_) => QueueProvider.forTesting(fakeClient, connectivity: connectivityService),
+          ),
+        ],
         child: const MaterialApp(home: WaitingRoomScreen()),
       ),
     );
+    await tester.pumpAndSettle(); // Attendre l'initialisation
 
-    // ✅ Vérifie que la file est vide au départ
+    // Vérifie que la file est vide au départ
     expect(find.text('Clients in Queue: 0'), findsOneWidget);
 
-    // ✅ Ajoute un client
+    // Ajoute un client
     await tester.enterText(find.byType(TextField), 'John Doe');
-    await tester.tap(find.byType(ElevatedButton));
-    await tester.pump(); // Rebuild après notifyListeners()
+    final addButton = find.byType(ElevatedButton);
+    await tester.ensureVisible(addButton);
+    await tester.tap(addButton, warnIfMissed: false);
+    await tester.pumpAndSettle(); // Rebuild après notifyListeners()
 
     // ✅ Vérifie que le client est affiché
     expect(find.text('John Doe'), findsOneWidget);
